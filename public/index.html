@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>XXQCRAFT</title>
+<style>
+:root{--bg:#0b0813;--fg:#f1eafa;--ac:#9333ea;--box:#1b122c}
+*{box-sizing:border-box;user-select:none;-webkit-user-select:none;touch-action:none}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
+canvas{display:block;width:100%;height:100%}
+.modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(8,4,16,.88);text-align:center;padding:16px;z-index:40}
+.panel{background:var(--box);border:2px solid var(--ac);border-radius:10px;padding:20px;max-width:440px;width:95%;box-shadow:0 0 25px rgba(147,51,234,.4)}
+h1{font-size:32px;margin:0 0 10px;color:#c084fc;letter-spacing:2px;text-shadow:0 0 10px #7e22ce}
+p{margin:6px 0;font-size:13px;color:#d8b4fe}
+.btn{display:inline-block;margin:6px 4px;padding:10px 18px;background:var(--ac);color:#fff;font-weight:700;border-radius:6px;cursor:pointer;border:none;transition:0.2s}
+.btn:active{transform:scale(0.96);background:#7e22ce}
+.input-box{width:100%;padding:10px;margin:6px 0;background:#0d0817;color:#fff;border:1px solid #6b21a8;border-radius:6px}
+#hb{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:4px;background:rgba(0,0,0,.6);padding:4px;border-radius:6px;z-index:10}
+.s{width:36px;height:36px;border:2px solid #581c87;position:relative;display:flex;align-items:flex-end;justify-content:flex-end;font-size:11px;font-weight:700}
+.s.on{border-color:#e9d5ff;box-shadow:0 0 8px #c084fc}
+#cx{position:fixed;top:50%;left:50%;width:14px;height:14px;margin:-7px 0 0 -7px;pointer-events:none;background:linear-gradient(#fff,#fff) center/2px 100% no-repeat,linear-gradient(#fff,#fff) center/100% 2px no-repeat;mix-blend-mode:difference;z-index:9}
+.hide{display:none!important}
+#tc{position:fixed;inset:0;pointer-events:none;z-index:15}
+#jl,#lk{position:absolute;top:0;bottom:0;pointer-events:auto}
+#jl{left:0;width:40%}#lk{right:0;width:60%}
+#jb{position:absolute;width:90px;height:90px;margin:-45px 0 0 -45px;border:3px solid rgba(192,132,252,.5);border-radius:50%;display:none}
+#jk{position:absolute;left:50%;top:50%;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;background:rgba(192,132,252,.7)}
+.ab{position:absolute;width:60px;height:60px;border-radius:50%;background:rgba(20,10,35,.7);border:2px solid #c084fc;color:#fff;font:700 12px ui-monospace,monospace;display:flex;align-items:center;justify-content:center;pointer-events:auto}
+#bj{bottom:140px;right:14px}#bk{bottom:70px;right:84px}#bp{bottom:70px;right:14px}
+#be{top:14px;right:14px}#bv{top:84px;right:14px}
+#hud{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,5,20,.7);padding:6px 12px;border-radius:6px;font-size:12px;border:1px solid #581c87}
+#tt{position:fixed;top:20%;left:50%;transform:translateX(-50%);z-index:25;background:rgba(0,0,0,.8);padding:8px 16px;border-radius:6px;opacity:0;transition:opacity .3s;color:#c084fc;pointer-events:none}
+#fl{position:fixed;inset:0;background:rgba(220,38,38,.4);opacity:0;pointer-events:none;z-index:8;transition:opacity .2s}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="cx" class="hide"></div>
+<div id="hud" class="hide"></div>
+<div id="tt"></div>
+<div id="fl"></div>
+<div id="hb" class="hide"></div>
+
+<div id="tc" class="hide">
+  <div id="jl"><div id="jb"><div id="jk"></div></div></div>
+  <div id="lk"></div>
+  <div class="ab" id="be">Menü</div>
+  <div class="ab" id="bv">Kamera</div>
+  <div class="ab" id="bj">Zıpla</div>
+  <div class="ab" id="bk">Kır</div>
+  <div class="ab" id="bp">Koy</div>
+</div>
+
+<!-- Giriş & Kayıt Ekranı -->
+<div id="authModal" class="modal">
+  <div class="panel">
+    <h1>XXQCRAFT</h1>
+    <p id="authMsg">Arkadaşlarınla oynamak için giriş yap veya çevrim dışı başla.</p>
+    <input id="authUser" class="input-box" placeholder="Kullanıcı Adı" maxlength="16">
+    <input id="authPass" type="password" class="input-box" placeholder="Şifre">
+    <div style="display:flex;justify-content:center;gap:6px">
+      <button class="btn" id="loginBtn">Giriş Yap</button>
+      <button class="btn" id="regBtn">Kayıt Ol</button>
+    </div>
+    <button class="btn" id="guestBtn" style="background:#374151;margin-top:10px">Çevrim Dışı Oyna</button>
+  </div>
+</div>
+
+<!-- Dünya Oluşturma / Seçim Ekranı -->
+<div id="worldModal" class="modal hide">
+  <div class="panel">
+    <h1>Dünya Ayarları</h1>
+    <p>Oyun modunu ve dünya parametrelerini belirle</p>
+    <input id="worldName" class="input-box" value="Yeni Dünya">
+    <input id="worldSeed" class="input-box" placeholder="Tohum (Seed - İsteğe bağlı)">
+    <div style="text-align:left;margin:10px 0;font-size:13px">
+      <label>Oyun Modu:</label>
+      <select id="gameMode" class="input-box">
+        <option value="s">Hayatta Kalma (Survival)</option>
+        <option value="c">Yaratıcı (Creative)</option>
+        <option value="a">Macera (Adventure)</option>
+        <option value="h">Zorlayıcı (Hardcore)</option>
+      </select>
+    </div>
+    <button class="btn" id="startLocal">Dünyayı Oluştur & Başla</button>
+    <button class="btn hide" id="startOnline" style="background:#7c3aed">Çevrim İçi Odaya Katıl</button>
+  </div>
+</div>
+
+<!-- Ölüm Ekranı -->
+<div id="deathModal" class="modal hide">
+  <div class="panel" style="border-color:#ef4444">
+    <h1 style="color:#ef4444">Öldün!</h1>
+    <p id="deathDesc">Skorun korundu.</p>
+    <button class="btn" id="respawnBtn">Yeniden Doğ</button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const W=96,D=96,H=48,CS=16;
+const world=new Uint8Array(W*H*D);
+let socket=null, netSync=false, onlineMode=false, authToken=null, authName='Oyuncu';
+const remotes=new Map();
+const I=(x,y,z)=>x+z*W+y*W*D;
+function get(x,y,z){if(y<0)return 3;if(y>=H||x<0||x>=W||z<0||z>=D)return 0;return world[I(x,y,z)]}
+function set(x,y,z,b){if(x<0||x>=W||y<0||y>=H||z<0||z>=D)return;world[I(x,y,z)]=b;if(netSync&&socket&&socket.connected)socket.emit('blockChange',{x,y,z,b})}
+
+// Doku Atlası
+const cv=document.createElement('canvas');cv.width=208;cv.height=16;
+const g=cv.getContext('2d');
+const base=['#5fa84a','#8a6a45','#8a6a45','#7c7c80','#6b4f2f','#3f8a35','#dccb8a','#b88a52','#7c7c80','#7c7c80','#7c7c80','#a8743a','#3b87c9'];
+for(let t=0;t<13;t++){
+  for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+    let c=base[t];
+    if(t===1&&y<4)c=base[0];
+    g.fillStyle=c;g.fillRect(t*16+x,y,1,1);
+    if(t===12) { g.fillStyle='rgba(180,225,255,.5)'; g.fillRect(t*16+x,y,1,1); }
+  }
+}
+const tex=new THREE.CanvasTexture(cv);tex.magFilter=THREE.NearestFilter;tex.minFilter=THREE.NearestFilter;
+const atlasURL=cv.toDataURL();
+const TILE={1:[0,1,2],2:[2,2,2],3:[3,3,3],4:[4,4,4],5:[5,5,5],6:[6,6,6],7:[7,7,7],8:[8,8,8],9:[9,9,9],10:[10,10,10],11:[11,11,11],12:[12,12,12]};
+
+let worldSeed=123456789;
+function worldRandom(){worldSeed=(worldSeed*1664525+1013904223)>>>0;return worldSeed/4294967296}
+
+function initTerrain(seedVal){
+  if(seedVal) worldSeed=seedVal;
+  for(let x=0;x<W;x++)for(let z=0;z<D;z++){
+    const h=16+Math.floor(13+5*Math.sin(x*.07)+5*Math.cos(z*.08)+3*Math.sin((x+z)*.13));
+    for(let y=0;y<=h;y++){
+      let b=y===h?(h<11?6:1):(y>h-4?2:3);
+      set(x,y,z,b);
+    }
+  }
+}
+
+// 3D Çizim & Sahne
+const FACES=[{d:[1,0,0],c:[[1,0,1],[1,0,0],[1,1,0],[1,1,1]],s:.8,k:1},{d:[-1,0,0],c:[[0,0,0],[0,0,1],[0,1,1],[0,1,0]],s:.7,k:1},{d:[0,1,0],c:[[0,1,1],[1,1,1],[1,1,0],[0,1,0]],s:1,k:0},{d:[0,-1,0],c:[[0,0,0],[1,0,0],[1,0,1],[0,0,1]],s:.5,k:2},{d:[0,0,1],c:[[0,0,1],[1,0,1],[1,1,1],[0,1,1]],s:.9,k:1},{d:[0,0,-1],c:[[1,0,0],[0,0,0],[0,1,0],[1,1,0]],s:.75,k:1}];
+const UV=[[0,0],[1,0],[1,1],[0,1]];
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x180d2b);
+scene.fog=new THREE.Fog(0x180d2b,30,80);
+const mat=new THREE.MeshBasicMaterial({map:tex,vertexColors:true,side:THREE.DoubleSide});
+const chunks={};
+
+function build(cx,cz){
+  const key=cx+','+cz;
+  if(chunks[key]){scene.remove(chunks[key]);chunks[key].geometry.dispose()}
+  const pos=[],uv=[],col=[],idx=[];let n=0;
+  for(let x=cx*CS;x<(cx+1)*CS&&x<W;x++)for(let z=cz*CS;z<(cz+1)*CS&&z<D;z++)for(let y=0;y<H;y++){
+    const b=get(x,y,z);if(!b)continue;
+    for(const f of FACES){
+      if(get(x+f.d[0],y+f.d[1],z+f.d[2]))continue;
+      const t=TILE[b][f.k];
+      f.c.forEach((c,i)=>{
+        pos.push(x+c[0],y+c[1],z+c[2]);
+        uv.push((t+UV[i][0])/13,UV[i][1]);
+        col.push(f.s,f.s,f.s);
+      });
+      idx.push(n,n+1,n+2,n,n+2,n+3);n+=4;
+    }
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  geo.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  geo.setIndex(idx);
+  const m=new THREE.Mesh(geo,mat);
+  scene.add(m);chunks[key]=m;
+}
+function rebuildAll(){for(let cx=0;cx<W/CS;cx++)for(let cz=0;cz<D/CS;cz++)build(cx,cz)}
+function rebuildAt(x,z){
+  const a=Math.floor(x/CS),b=Math.floor(z/CS);
+  build(a,b);
+}
+
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:false});
+const camera=new THREE.PerspectiveCamera(75,1,.1,200);
+camera.rotation.order='YXZ';
+function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}
+addEventListener('resize',resize);resize();
+
+// Oyuncu Değişkenleri
+const P={x:W/2+.5,y:35,z:D/2+.5,vx:0,vy:0,vz:0,on:false};
+let yaw=0,pitch=0,gameMode='s',locked=false,dead=false,hp=20,fd=20,camV=0,cur=0;
+const inv={bu:Infinity,1:64,2:64,3:64,4:64,7:64,sw:1,pk:1}; // Sınırsız su kovası (bu)
+const slots=['bu',1,2,3,4,7,'sw','pk',null];
+const IC={bu:'🪣 (Sonsuz Su)',sw:'⚔',pk:'⛏',1:'🌱',2:'🟫',3:'🪨',4:'🪵',7:'🪵'};
+
+const hb=document.getElementById('hb');
+for(let i=0;i<9;i++){const d=document.createElement('div');d.className='s';hb.appendChild(d)}
+function sel(i){cur=(i+9)%9;[...hb.children].forEach((d,j)=>d.classList.toggle('on',j===cur));updHB()}
+function updHB(){
+  [...hb.children].forEach((d,i)=>{
+    const k=slots[i];
+    d.innerHTML=k?`<span style="margin:auto;font-size:16px">${IC[k]||k}</span>`:'';
+  });
+}
+sel(0);
+
+// Su ve Blok Koyma
+function ray(){
+  const cp=Math.cos(pitch),dx=-Math.sin(yaw)*cp,dy=Math.sin(pitch),dz=-Math.cos(yaw)*cp;
+  let ox=P.x,oy=P.y+1.6,oz=P.z,l=null;
+  for(let t=0;t<6;t+=.04){
+    const f=[Math.floor(ox+dx*t),Math.floor(oy+dy*t),Math.floor(oz+dz*t)];
+    if(get(...f)>0)return{b:f,p:l,block:get(...f)};
+    l=f;
+  }
+  return null;
+}
+
+function act(btn){
+  if(gameMode==='a') return; // Macera modunda kırma/koyma kapalı
+  const r=ray();if(!r)return;
+  if(btn===0){ // Kır
+    set(...r.b,0);rebuildAt(r.b[0],r.b[2]);
+  }else{ // Koy
+    const item=slots[cur];
+    if(item==='bu'){
+      if(r.block===12){set(...r.b,0);rebuildAt(r.b[0],r.b[2]);msg('Su toplandı!');}
+      else if(r.p){set(...r.p,12);rebuildAt(r.p[0],r.p[2]);msg('Sınırsız su döküldü!');}
+    }else if(typeof item==='number'&&r.p){
+      set(...r.p,item);rebuildAt(r.p[0],r.p[2]);
+    }
+  }
+}
+
+function msg(t){const tt=document.getElementById('tt');tt.textContent=t;tt.style.opacity=1;setTimeout(()=>tt.style.opacity=0,1500)}
+
+// Dokunmatik Kontroller (Android)
+const touch=navigator.maxTouchPoints>0||'ontouchstart' in window;
+let jx=0,jy=0,jid=null,jo=null,lid=null,lp=null,jump=false;
+const jb=document.getElementById('jb'),jk=document.getElementById('jk');
+const jl=document.getElementById('jl'),lk=document.getElementById('lk');
+
+jl.addEventListener('touchstart',e=>{const t=e.changedTouches[0];jid=t.identifier;jo=[t.clientX,t.clientY];jb.style.display='block';jb.style.left=t.clientX+'px';jb.style.top=t.clientY+'px'},{passive:false});
+jl.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===jid){let dx=t.clientX-jo[0],dy=t.clientY-jo[1];const m=Math.hypot(dx,dy),R=45;if(m>R){dx*=R/m;dy*=R/m}jx=dx/R;jy=dy/R;jk.style.transform=`translate(${dx}px,${dy}px)`}},{passive:false});
+const jend=()=>{jid=null;jx=jy=0;jb.style.display='none'};
+jl.addEventListener('touchend',jend);jl.addEventListener('touchcancel',jend);
+
+lk.addEventListener('touchstart',e=>{const t=e.changedTouches[0];lid=t.identifier;lp=[t.clientX,t.clientY]},{passive:false});
+lk.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===lid){yaw-=(t.clientX-lp[0])*.006;pitch=Math.max(-1.55,Math.min(1.55,pitch-(t.clientY-lp[1])*.006));lp=[t.clientX,t.clientY]}},{passive:false});
+lk.addEventListener('touchend',()=>lid=null);lk.addEventListener('touchcancel',()=>lid=null);
+
+document.getElementById('bj').addEventListener('touchstart',()=>{jump=true});
+document.getElementById('bj').addEventListener('touchend',()=>{jump=false});
+document.getElementById('bk').addEventListener('touchstart',()=>act(0));
+document.getElementById('bp').addEventListener('touchstart',()=>act(2));
+document.getElementById('bv').addEventListener('touchstart',()=>{camV=(camV+1)%2});
+
+// Döngü ve Fizik
+function loop(){
+  if(locked&&!dead){
+    const sp=(gameMode==='c'?7:4.5);
+    const f=-jy, s=jx;
+    const len=Math.max(1,Math.hypot(f,s));
+    P.vx=((-Math.sin(yaw))*f+Math.cos(yaw)*s)/len*sp;
+    P.vz=((-Math.cos(yaw))*f-Math.sin(yaw)*s)/len*sp;
+    P.vy-=(gameMode==='c'?0:26*.016);
+    if(jump&&P.on)P.vy=8.5;
+
+    P.x+=P.vx*.016;P.z+=P.vz*.016;P.y+=P.vy*.016;
+    if(P.y<20){P.y=35;P.vy=0;P.on=true}
+  }
+
+  camera.position.set(P.x,P.y+1.6,P.z);
+  camera.rotation.set(pitch,yaw,0);
+
+  renderer.render(scene,camera);
+  requestAnimationFrame(loop);
+}
+
+// Başlatma ve Menü İşlemleri
+function startGameProcess(mode){
+  gameMode=mode;
+  document.getElementById('worldModal').classList.add('hide');
+  document.getElementById('cx').classList.remove('hide');
+  document.getElementById('hb').classList.remove('hide');
+  document.getElementById('hud').classList.remove('hide');
+  if(touch)document.getElementById('tc').classList.remove('hide');
+  initTerrain(parseInt(document.getElementById('worldSeed').value)||123456);
+  rebuildAll();
+  locked=true;
+  loop();
+}
+
+document.getElementById('startLocal').onclick=()=>startGameProcess(document.getElementById('gameMode').value);
+document.getElementById('guestBtn').onclick=()=>{
+  document.getElementById('authModal').classList.add('hide');
+  document.getElementById('worldModal').classList.remove('hide');
+};
+document.getElementById('loginBtn').onclick=async()=>{
+  const u=document.getElementById('authUser').value,p=document.getElementById('authPass').value;
+  try{
+    const res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    const d=await res.json();
+    if(res.ok){authToken=d.token;authName=d.username;document.getElementById('authModal').classList.add('hide');document.getElementById('worldModal').classList.remove('hide');document.getElementById('startOnline').classList.remove('hide');}
+    else alert(d.error);
+  }catch(e){alert('Sunucuya bağlanılamadı. Çevrim dışı oynayabilirsiniz.');}
+};
+document.getElementById('regBtn').onclick=async()=>{
+  const u=document.getElementById('authUser').value,p=document.getElementById('authPass').value;
+  try{
+    const res=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    const d=await res.json();
+    if(res.ok){authToken=d.token;authName=d.username;document.getElementById('authModal').classList.add('hide');document.getElementById('worldModal').classList.remove('hide');document.getElementById('startOnline').classList.remove('hide');}
+    else alert(d.error);
+  }catch(e){alert('Sunucuya bağlanılamadı.');}
+};
+</script>
+</body>
+</html>

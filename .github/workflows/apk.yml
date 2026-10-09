@@ -1,0 +1,41 @@
+name: XXQCRAFT APK Build
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kodu Cek
+        uses: actions/checkout@v4
+
+      - name: Node.js Kur
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Java 17 Kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Bagimliliklari Yukle ve Android Hazirla
+        run: |
+          npm ci
+          npx cap sync android
+
+      - name: APK Derle
+        run: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
+
+      - name: APK Dosyasini Indirilebilir Yap
+        uses: actions/upload-artifact@v4
+        with:
+          name: XXQCRAFT-Apk
+          path: android/app/build/outputs/apk/debug/*.apk
