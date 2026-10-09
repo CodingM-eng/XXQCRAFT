@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Java 17 Kur
+      - name: Java 21 Kur
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
