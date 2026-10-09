@@ -534,6 +534,7 @@ function bindSocketEvents(){
       socket.emit('joinWorld',{code:currentWorldCode},(result)=>{
         if(!result?.ok){msg(result?.error||'Dünyaya yeniden bağlanılamadı.');return}
         remotes.forEach((_,id)=>removeRemote(id));
+        droppedItems.forEach((_,id)=>removeDroppedItem(id));
         initTerrain(result.world.seed);
         result.world.blocks.forEach((block)=>{world[I(block.x,block.y,block.z)]=block.b});
         result.world.drops?.forEach(spawnDroppedItem);
@@ -615,7 +616,7 @@ const jl=document.getElementById('jl'),lk=document.getElementById('lk');
 
 jl.addEventListener('touchstart',e=>{const t=e.changedTouches[0];jid=t.identifier;jo=[t.clientX,t.clientY];jb.style.display='block';jb.style.left=t.clientX+'px';jb.style.top=t.clientY+'px'},{passive:false});
 jl.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===jid){let dx=t.clientX-jo[0],dy=t.clientY-jo[1];const m=Math.hypot(dx,dy),R=45;if(m>R){dx*=R/m;dy*=R/m}jx=dx/R;jy=dy/R;jk.style.transform=`translate(${dx}px,${dy}px)`}},{passive:false});
-const jend=()=>{jid=null;jx=jy=0;jb.style.display='none'};
+const jend=()=>{jid=null;jx=jy=0;jb.style.display='none';jk.style.transform='translate(0px,0px)'};
 jl.addEventListener('touchend',jend);jl.addEventListener('touchcancel',jend);
 
 lk.addEventListener('touchstart',e=>{const t=e.changedTouches[0];lid=t.identifier;lp=[t.clientX,t.clientY]},{passive:false});
