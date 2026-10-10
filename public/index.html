@@ -16,6 +16,8 @@ h1{font-size:32px;margin:0 0 10px;color:#c084fc;letter-spacing:2px;text-shadow:0
 p{margin:6px 0;font-size:13px;color:#d8b4fe}
 .btn{display:inline-block;margin:6px 4px;padding:10px 18px;background:var(--ac);color:#fff;font-weight:700;border-radius:6px;cursor:pointer;border:none;transition:0.2s}
 .btn:active{transform:scale(0.96);background:#7e22ce}
+.world-actions{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:10px}
+.world-actions .btn{width:100%;min-height:46px;margin:0;white-space:normal}
 .input-box{width:100%;padding:10px;margin:6px 0;background:#0d0817;color:#fff;border:1px solid #6b21a8;border-radius:6px}
 #hb{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:3px;width:min(390px,calc(100vw - 16px));background:rgba(0,0,0,.72);padding:4px;border-radius:6px;z-index:20}
 .s{width:100%;height:auto;aspect-ratio:1;border:2px solid #581c87;position:relative;display:flex;align-items:flex-end;justify-content:flex-end;font-size:11px;font-weight:700;min-width:0}
@@ -129,8 +131,12 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
         <option value="h">Zorlayıcı (Hardcore)</option>
       </select>
     </div>
-    <button class="btn" id="startLocal">Dünyayı Oluştur & Başla</button>
-    <button class="btn hide" id="startOnline" style="background:#7c3aed">Çevrim İçi Odaya Katıl</button>
+    <div class="world-actions">
+      <div class="world-actions">
+        <button class="btn" id="startLocal" type="button">Çevrim Dışı Başla</button>
+        <button class="btn hide" id="startOnline" type="button" style="background:#7c3aed">Çevrim İçi Dünya Oluştur</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -155,7 +161,6 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
       <section class="inventory-section">
         <h2>Üretim</h2>
         <div id="recipeList" class="recipe-list"></div>
-        <div id="creativeCatalog" class="hide"><h2 style="margin-top:16px">Yaratıcı bloklar</h2><div id="creativeItems" class="recipe-list"></div></div>
       </section>
     </div>
   </div>
@@ -169,6 +174,7 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
     <label for="fieldOfView">Görüş açısı <output id="fovValue"></output></label>
     <input id="fieldOfView" type="range" min="60" max="100" step="1" value="75">
     <label for="invertLook">Dikey bakışı ters çevir <input id="invertLook" type="checkbox"></label>
+    <label for="reverseScroll">Hotbar tekerlek yönünü ters çevir <input id="reverseScroll" type="checkbox"></label>
     <button class="btn" id="resumeBtn" type="button">Oyuna Dön</button>
   </div>
 </div>
@@ -361,7 +367,7 @@ const renderer=new THREE.WebGLRenderer({canvas,antialias:false});
 const camera=new THREE.PerspectiveCamera(75,1,.1,200);
 camera.rotation.order='YXZ';
 const SETTINGS_KEY='xxqcraft-game-settings';
-let gameSettings={sensitivity:5,fov:75,invertY:false};
+let gameSettings={sensitivity:5,fov:75,invertY:false,reverseScroll:false};
 try{gameSettings={...gameSettings,...JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')}}catch{}
 camera.fov=Math.max(60,Math.min(100,Number(gameSettings.fov)||75));camera.updateProjectionMatrix();
 function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}
@@ -374,8 +380,8 @@ let survivalClock=0,fallStartY=null,chatOpen=false,settingsOpen=false,gamePaused
 let miningHeld=false,miningTarget=null,miningElapsed=0;
 const INVENTORY_SIZE=36,STACK_LIMIT=64;
 const inv=Array(INVENTORY_SIZE).fill(null);
-const IC={eb:'🪣',wb:'💧',sw:'⚔',pk:'⛏',st:'│',ir:'🔩',1:'🌱',2:'🟫',3:'🪨',4:'🪵',5:'🍃',6:'🟨',7:'🪵',8:'🔩'};
-const itemNames={eb:'Boş kova',wb:'Su kovası',sw:'Tahta kılıç',pk:'Tahta kazma',st:'Çubuk',ir:'Demir',1:'Çim',2:'Toprak',3:'Taş',4:'Kütük',5:'Yaprak',6:'Kum',7:'Tahta',8:'Demir cevheri'};
+const IC={eb:'🪣',wb:'💧',sw:'⚔',pk:'⛏',st:'│',ir:'🔩',1:'🌱',2:'🟫',3:'🪨',4:'🪵',5:'🍃',6:'🟨',7:'🪵',8:'🔩',9:'🧱',10:'⬜',11:'⬛',12:'💧'};
+const itemNames={eb:'Boş kova',wb:'Su kovası',sw:'Tahta kılıç',pk:'Tahta kazma',st:'Çubuk',ir:'Demir',1:'Çim',2:'Toprak',3:'Taş',4:'Kütük',5:'Yaprak',6:'Kum',7:'Tahta',8:'Demir cevheri',9:'Blok 9',10:'Blok 10',11:'Blok 11',12:'Su bloğu'};
 const blockDrops={1:'1',2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'ir',9:'9',10:'10',11:'11'};
 const recipes=[
   {name:'Tahta x4',needs:{4:1},gives:{id:7,count:4}},
@@ -425,7 +431,16 @@ function removeItem(id,count=1){
   if(inventoryOpen)renderInventory();
   return true;
 }
-function resetInventory(){inv.fill(null);cur=0;selectedInventorySlot=null;updHB()}
+function resetInventory(){
+  inv.fill(null);cur=0;selectedInventorySlot=null;
+  if(gameMode==='c'){
+    for(let id=1;id<=12;id++){
+      const index=id<=9?27+id-1:id-10;
+      inv[index]={id:String(id),count:64};
+    }
+  }
+  updHB();
+}
 function updateSurvivalHud(){
   const health=document.getElementById('healthValue'),food=document.getElementById('foodValue');
   health.textContent=`${'♥'.repeat(Math.ceil(hp/2))}${'♡'.repeat(10-Math.ceil(hp/2))} ${hp}/20`;
@@ -452,6 +467,7 @@ function saveGameSettings(){
   gameSettings.sensitivity=Number(document.getElementById('lookSensitivity').value);
   gameSettings.fov=Number(document.getElementById('fieldOfView').value);
   gameSettings.invertY=document.getElementById('invertLook').checked;
+  gameSettings.reverseScroll=document.getElementById('reverseScroll').checked;
   camera.fov=gameSettings.fov;camera.updateProjectionMatrix();
   document.getElementById('sensitivityValue').value=gameSettings.sensitivity;
   document.getElementById('fovValue').value=`${gameSettings.fov}°`;
@@ -501,15 +517,6 @@ function renderInventory(){
     button.innerHTML=`<span>${recipe.name}<small>${ingredients}</small></span><span>${IC[recipe.gives.id]||recipe.gives.id}</span>`;
     button.addEventListener('click',()=>craftRecipe(index));recipeList.append(button);
   });
-  const catalog=document.getElementById('creativeCatalog'),creativeItems=document.getElementById('creativeItems');
-  catalog.classList.toggle('hide',gameMode!=='c');creativeItems.replaceChildren();
-  if(gameMode==='c'){
-    for(const id of ['1','2','3','4','5','6','7']){
-      const button=document.createElement('button');button.type='button';button.className='recipe';
-      button.innerHTML=`<span>${itemNames[id]}<small>Envantere 64 ekle</small></span><span>${IC[id]}</span>`;
-      button.addEventListener('click',()=>{const overflow=addItem(id,64);if(overflow)msg('Envanterde yer aç.');renderInventory()});creativeItems.append(button);
-    }
-  }
 }
 function toggleInventory(force){
   inventoryOpen=typeof force==='boolean'?force:!inventoryOpen;
@@ -786,10 +793,12 @@ const jl=document.getElementById('jl'),lk=document.getElementById('lk');
 document.getElementById('lookSensitivity').value=gameSettings.sensitivity;
 document.getElementById('fieldOfView').value=gameSettings.fov;
 document.getElementById('invertLook').checked=gameSettings.invertY;
+document.getElementById('reverseScroll').checked=gameSettings.reverseScroll;
 saveGameSettings();
 document.getElementById('lookSensitivity').addEventListener('input',saveGameSettings);
 document.getElementById('fieldOfView').addEventListener('input',saveGameSettings);
 document.getElementById('invertLook').addEventListener('change',saveGameSettings);
+document.getElementById('reverseScroll').addEventListener('change',saveGameSettings);
 document.getElementById('resumeBtn').addEventListener('click',()=>toggleSettings(false));
 document.getElementById('bm').addEventListener('click',()=>toggleSettings());
 
@@ -836,8 +845,9 @@ window.addEventListener('keydown',(event)=>{
 });
 window.addEventListener('keyup',(event)=>{keysDown.delete(event.code);if(event.code==='Space')jump=false});
 window.addEventListener('wheel',(event)=>{
-  if(!locked||inventoryOpen||chatOpen)return;
-  sel(cur+(event.deltaY>0?1:-1));event.preventDefault();
+  if(!locked||inventoryOpen||chatOpen||settingsOpen||gamePaused)return;
+  const direction=event.deltaY>0?1:-1;
+  sel(cur+(gameSettings.reverseScroll?-direction:direction));event.preventDefault();
 },{passive:false});
 canvas.addEventListener('click',()=>{if(!touch&&locked&&!pointerLocked)canvas.requestPointerLock?.()});
 document.addEventListener('pointerlockchange',()=>{pointerLocked=document.pointerLockElement===canvas;if(!pointerLocked)stopMining()});
@@ -977,6 +987,10 @@ function startGameProcess(mode,session=null){
 
 document.getElementById('startLocal').onclick=()=>startGameProcess(document.getElementById('gameMode').value);
 document.getElementById('startOnline').onclick=startOnlineGame;
+function updateOnlineButtonLabel(){
+  document.getElementById('startOnline').textContent=document.getElementById('worldCode').value.trim()?'Dünya Koduyla Katıl':'Çevrim İçi Dünya Oluştur';
+}
+document.getElementById('worldCode').addEventListener('input',updateOnlineButtonLabel);
 document.getElementById('guestBtn').onclick=()=>{
   document.getElementById('authModal').classList.add('hide');
   document.getElementById('worldModal').classList.remove('hide');
