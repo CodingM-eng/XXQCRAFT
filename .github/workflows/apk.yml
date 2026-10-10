@@ -32,7 +32,7 @@ jobs:
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug -PversionCode="$GITHUB_RUN_NUMBER" -PversionName="1.0.$GITHUB_RUN_NUMBER"
+          ./gradlew assembleDebug -PappVersionCode="$GITHUB_RUN_NUMBER" -PappVersionName="1.0.$GITHUB_RUN_NUMBER"
 
       - name: APK Dosyasini Indirilebilir Yap
         uses: actions/upload-artifact@v4
