@@ -314,6 +314,7 @@ io.on('connection', (socket) => {
       id: crypto.randomUUID(),
       item,
       count,
+      owner: socket.id,
       x: player.x,
       y: player.y + 0.5,
       z: player.z
@@ -337,6 +338,16 @@ io.on('connection', (socket) => {
     schedulePersist();
     io.to(code).emit('itemPickedUp', { id: drop.id, by: socket.id });
     ack({ ok: true, item: drop.item, count: drop.count });
+  });
+
+  socket.on('chatMessage', (message, ack = () => {}) => {
+    const code = socket.data.worldCode;
+    const player = rooms.get(code)?.players.get(socket.id);
+    const text = typeof message === 'string' ? message.trim().slice(0, 160) : '';
+    if (!player || !text) return ack({ ok: false, error: 'Sohbet mesajı boş veya geçersiz.' });
+    const chatMessage = { name: player.name, text, timestamp: Date.now() };
+    socket.to(code).emit('chatMessage', chatMessage);
+    ack({ ok: true, message: chatMessage });
   });
 
   socket.on('voiceState', (enabled) => {

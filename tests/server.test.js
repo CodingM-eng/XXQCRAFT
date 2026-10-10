@@ -45,7 +45,7 @@ async function startServer() {
     if (serverProcess.exitCode !== null) throw new Error(`Server exited with ${serverProcess.exitCode}: ${output.join('')}`);
     await delay(100);
   }
-  throw new Error('Server did not start in time');
+  throw new Error(`Server did not start in time on port ${port}: ${output.join('')}`);
 }
 
 async function stopServer() {
@@ -157,6 +157,12 @@ test('world rooms sync players, blocks, voice signals, and persist across restar
   assert.equal(pickup.ok, true);
   assert.equal(pickup.item, '4');
   await dropRemoved;
+
+  const chatReceived = waitForEvent(friendSocket, 'chatMessage', (message) => message.text === 'Hello from test');
+  const chat = await emitAck(ownerSocket, 'chatMessage', '  Hello from test  ');
+  assert.equal(chat.ok, true);
+  assert.equal(chat.message.name, 'WorldOwner');
+  await chatReceived;
 
   const persistedDrop = await emitAck(ownerSocket, 'dropItem', { item: 'st', count: 3 });
   assert.equal(persistedDrop.ok, true);

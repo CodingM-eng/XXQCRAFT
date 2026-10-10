@@ -45,7 +45,14 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
 .ab{position:absolute;width:60px;height:60px;border-radius:50%;background:rgba(20,10,35,.7);border:2px solid #c084fc;color:#fff;font:700 12px ui-monospace,monospace;display:flex;align-items:center;justify-content:center;pointer-events:auto}
 #bj{bottom:140px;right:14px}#bk{bottom:70px;right:84px}#bp{bottom:70px;right:14px}
 #be{top:14px;right:14px}#bv{top:84px;right:14px}
+#bt{top:154px;right:14px}#bq{bottom:210px;right:14px}
 #hud{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,5,20,.7);padding:6px 12px;border-radius:6px;font-size:12px;border:1px solid #581c87}
+#survivalHud{position:fixed;top:42px;left:10px;z-index:10;display:flex;gap:10px;background:rgba(10,5,20,.82);padding:6px 10px;border:1px solid #581c87;border-radius:5px;font-size:12px}
+#chatLog{position:fixed;left:10px;bottom:76px;z-index:18;width:min(420px,calc(100vw - 20px));max-height:180px;overflow:auto;pointer-events:none;text-shadow:1px 1px 2px #000}
+.chat-line{width:max-content;max-width:100%;margin:3px 0;padding:4px 7px;background:rgba(0,0,0,.5);border-radius:3px;overflow-wrap:anywhere;font-size:12px}
+#chatBox{position:fixed;left:10px;bottom:78px;z-index:35;width:min(480px,calc(100vw - 20px));display:flex;gap:4px;pointer-events:auto}
+#chatInput{flex:1;min-width:0;background:#100b1b;color:#fff;border:1px solid #a855f7;padding:10px;font:14px ui-monospace,monospace;touch-action:auto;user-select:text}
+#chatSend{background:#6b21a8;color:#fff;border:1px solid #c084fc;padding:8px 12px;touch-action:manipulation}
 #netHud{position:fixed;top:54px;left:10px;z-index:12;display:flex;align-items:center;gap:6px;background:rgba(10,5,20,.82);padding:6px;border:1px solid #581c87;border-radius:6px;font-size:12px}
 #netHud button{background:#38204f;color:#fff;border:1px solid #c084fc;border-radius:4px;padding:7px 9px;font:inherit;touch-action:manipulation}
 #netState{padding:0 4px}
@@ -59,6 +66,9 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
 <canvas id="c"></canvas>
 <div id="cx" class="hide"></div>
 <div id="hud" class="hide"></div>
+<div id="survivalHud" class="hide"><span id="healthValue">Can 20/20</span><span id="foodValue">Açlık 20/20</span></div>
+<div id="chatLog" class="hide" aria-live="polite"></div>
+<form id="chatBox" class="hide"><input id="chatInput" maxlength="160" autocomplete="off" placeholder="Mesaj yaz..."><button id="chatSend" type="submit">Gönder</button></form>
 <div id="tt"></div>
 <div id="fl"></div>
 <div id="hb" class="hide"></div>
@@ -69,7 +79,9 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
   <div id="lk"></div>
   <div class="ab" id="be">Çanta</div>
   <div class="ab" id="bv">Kamera</div>
+  <div class="ab" id="bt">Sohbet</div>
   <div class="ab" id="bj">Zıpla</div>
+  <div class="ab" id="bq">At</div>
   <div class="ab" id="bk">Kır</div>
   <div class="ab" id="bp">Koy</div>
 </div>
@@ -79,7 +91,7 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
   <div class="panel">
     <h1>XXQCRAFT</h1>
     <p id="authMsg">Arkadaşlarınla oynamak için giriş yap veya çevrim dışı başla.</p>
-    <input id="serverUrl" class="input-box" type="url" placeholder="Çok oyunculu sunucu adresi (HTTPS)">
+    <p>Çevrim içi oyun, oyunu sunan Node sunucusuna otomatik bağlanır. Pages üzerinde misafir modu kullanılabilir.</p>
     <input id="authUser" class="input-box" placeholder="Kullanıcı Adı" maxlength="16">
     <input id="authPass" type="password" class="input-box" placeholder="Şifre">
     <div style="display:flex;justify-content:center;gap:6px">
@@ -133,6 +145,7 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
       <section class="inventory-section">
         <h2>Üretim</h2>
         <div id="recipeList" class="recipe-list"></div>
+        <div id="creativeCatalog" class="hide"><h2 style="margin-top:16px">Yaratıcı bloklar</h2><div id="creativeItems" class="recipe-list"></div></div>
       </section>
     </div>
   </div>
@@ -151,19 +164,14 @@ const pendingPickups=new Set();
 const voicePeers=new Map();
 const audioElements=new Map();
 const keysDown=new Set();
-const SERVER_STORAGE_KEY='xxqcraft-server-url';
-const serverUrlInput=document.getElementById('serverUrl');
-serverUrlInput.value=localStorage.getItem(SERVER_STORAGE_KEY)||window.XXQCRAFT_SERVER_URL||'';
 function getServerBase(){
-  if(location.hostname.endsWith('github.io')&&!serverUrlInput.value.trim()&&!window.XXQCRAFT_SERVER_URL){
-    throw new Error('GitHub Pages yalnızca oyunu barındırır. Önce çalışan oyun sunucusunun HTTPS adresini gir.');
+  if(location.hostname.endsWith('github.io')&&!window.XXQCRAFT_SERVER_URL){
+    throw new Error('GitHub Pages sunucu çalıştırmaz. Çevrim içi oyun için Node sunucusunu sürekli açık bir host üzerinde çalıştırın.');
   }
-  const value=serverUrlInput.value.trim()||window.XXQCRAFT_SERVER_URL||location.origin;
+  const value=window.XXQCRAFT_SERVER_URL||location.origin;
   const url=new URL(value);
   if(url.protocol!=='https:'&&url.hostname!=='localhost'&&url.hostname!=='127.0.0.1')throw new Error('Sunucu adresi HTTPS olmalıdır.');
-  const base=url.origin;
-  localStorage.setItem(SERVER_STORAGE_KEY,base);
-  return base;
+  return url.origin;
 }
 const I=(x,y,z)=>x+z*W+y*W*D;
 function get(x,y,z){if(y<0)return 3;if(y>=H||x<0||x>=W||z<0||z>=D)return 0;return world[I(x,y,z)]}
@@ -294,14 +302,15 @@ function spawnDroppedItem(drop){
   const colors={eb:0xcbd5e1,wb:0x38bdf8,sw:0xa16207,pk:0x9ca3af,st:0x9a633d,ir:0xb9c7c5,1:0x5fa84a,2:0x8a6a45,3:0x7c7c80,4:0x6b4f2f,5:0x3f8a35,6:0xdccb8a,7:0xb88a52,8:0x9a8c7a};
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(.28,.28,.28),new THREE.MeshBasicMaterial({color:colors[drop.item]||0xffffff}));
   mesh.position.set(drop.x,drop.y,drop.z);scene.add(mesh);
-  droppedItems.set(drop.id,{mesh,item:String(drop.item),count:drop.count,baseY:drop.y});
+  const ownerDrop=drop.owner==='local'||drop.owner===socket?.id||drop.id.startsWith('local-');
+  droppedItems.set(drop.id,{mesh,item:String(drop.item),count:drop.count,baseY:drop.y,pickupAfter:performance.now()+(ownerDrop?1000:0)});
 }
 function removeDroppedItem(id){
   const drop=droppedItems.get(id);if(!drop)return;
   scene.remove(drop.mesh);drop.mesh.geometry.dispose();drop.mesh.material.dispose();droppedItems.delete(id);pendingPickups.delete(id);
 }
 function dropItemStack(item,count,x=P.x,y=P.y+.5,z=P.z){
-  const drop={id:`local-${Date.now()}-${Math.random()}`,item:String(item),count,x,y,z};
+  const drop={id:`local-${Date.now()}-${Math.random()}`,owner:'local',item:String(item),count,x,y,z};
   if(onlineMode&&socket?.connected){
     socket.emit('dropItem',{item:String(item),count},(result)=>{if(!result?.ok)return msg(result?.error||'Eşya bırakılamadı.')});
   }else spawnDroppedItem(drop);
@@ -317,6 +326,7 @@ addEventListener('resize',resize);resize();
 // Oyuncu Değişkenleri
 const P={x:W/2+.5,y:35,z:D/2+.5,vx:0,vy:0,vz:0,on:false};
 let yaw=0,pitch=0,gameMode='s',locked=false,dead=false,hp=20,fd=20,camV=0,cur=0;
+let survivalClock=0,fallStartY=null,chatOpen=false;
 const INVENTORY_SIZE=36,STACK_LIMIT=64;
 const inv=Array(INVENTORY_SIZE).fill(null);
 const IC={eb:'🪣',wb:'💧',sw:'⚔',pk:'⛏',st:'│',ir:'🔩',1:'🌱',2:'🟫',3:'🪨',4:'🪵',5:'🍃',6:'🟨',7:'🪵',8:'🔩'};
@@ -371,6 +381,29 @@ function removeItem(id,count=1){
   return true;
 }
 function resetInventory(){inv.fill(null);cur=0;selectedInventorySlot=null;updHB()}
+function updateSurvivalHud(){
+  const health=document.getElementById('healthValue'),food=document.getElementById('foodValue');
+  health.textContent=`${'♥'.repeat(Math.ceil(hp/2))}${'♡'.repeat(10-Math.ceil(hp/2))} ${hp}/20`;
+  food.textContent=`${'●'.repeat(Math.ceil(fd/2))}${'○'.repeat(10-Math.ceil(fd/2))} ${fd}/20`;
+  document.getElementById('survivalHud').classList.toggle('hide',!locked||gameMode==='c');
+}
+function takeDamage(amount){
+  if(gameMode==='c'||dead)return;
+  hp=Math.max(0,hp-amount);updateSurvivalHud();
+  document.getElementById('fl').style.opacity=hp>0?'.35':'0';
+  setTimeout(()=>document.getElementById('fl').style.opacity='0',180);
+  if(hp===0){
+    dead=true;document.getElementById('deathModal').classList.remove('hide');
+    document.exitPointerLock?.();keysDown.clear();
+  }
+}
+function respawn(){
+  let groundY=23;
+  for(let y=H-2;y>=0;y--){if(get(Math.floor(W/2),y,Math.floor(D/2))!==0&&get(Math.floor(W/2),y,Math.floor(D/2))!==12){groundY=y+1;break}}
+  P.x=W/2+.5;P.y=groundY;P.z=D/2+.5;P.vx=P.vy=P.vz=0;P.on=true;
+  hp=20;if(gameMode!=='h')fd=20;
+  dead=false;fallStartY=null;document.getElementById('deathModal').classList.add('hide');updateSurvivalHud();
+}
 function recipeAvailable(recipe){return Object.entries(recipe.needs).every(([id,count])=>countItem(id)>=count)}
 function craftRecipe(index){
   const recipe=recipes[index];if(!recipe||!recipeAvailable(recipe))return;
@@ -407,6 +440,15 @@ function renderInventory(){
     button.innerHTML=`<span>${recipe.name}<small>${ingredients}</small></span><span>${IC[recipe.gives.id]||recipe.gives.id}</span>`;
     button.addEventListener('click',()=>craftRecipe(index));recipeList.append(button);
   });
+  const catalog=document.getElementById('creativeCatalog'),creativeItems=document.getElementById('creativeItems');
+  catalog.classList.toggle('hide',gameMode!=='c');creativeItems.replaceChildren();
+  if(gameMode==='c'){
+    for(const id of ['1','2','3','4','5','6','7']){
+      const button=document.createElement('button');button.type='button';button.className='recipe';
+      button.innerHTML=`<span>${itemNames[id]}<small>Envantere 64 ekle</small></span><span>${IC[id]}</span>`;
+      button.addEventListener('click',()=>{const overflow=addItem(id,64);if(overflow)msg('Envanterde yer aç.');renderInventory()});creativeItems.append(button);
+    }
+  }
 }
 function toggleInventory(force){
   inventoryOpen=typeof force==='boolean'?force:!inventoryOpen;
@@ -425,6 +467,31 @@ function dropSelectedStack(){
   }else{
     dropItemStack(item.id,item.count);finishDrop();
   }
+}
+function dropSelectedItem(){
+  const index=27+cur,item=inv[index];if(!item)return;
+  if(onlineMode&&socket?.connected){
+    socket.emit('dropItem',{item:item.id,count:1},(result)=>{
+      if(!result?.ok)return msg(result?.error||'Eşya atılamadı.');
+      removeItem(item.id,1);
+    });
+  }else{
+    dropItemStack(item.id,1);removeItem(item.id,1);
+  }
+}
+function showChatMessage(message){
+  const line=document.createElement('div');line.className='chat-line';
+  const name=document.createElement('strong');name.textContent=`${message.name}: `;
+  const text=document.createElement('span');text.textContent=message.text;
+  line.append(name,text);const log=document.getElementById('chatLog');log.append(line);log.scrollTop=log.scrollHeight;
+  setTimeout(()=>line.remove(),15000);
+}
+function openChat(){
+  if(chatOpen||dead)return;chatOpen=true;document.getElementById('chatBox').classList.remove('hide');
+  document.exitPointerLock?.();document.getElementById('chatInput').focus();
+}
+function closeChat(){
+  chatOpen=false;document.getElementById('chatBox').classList.add('hide');document.getElementById('chatInput').blur();
 }
 sel(0);
 
@@ -446,7 +513,7 @@ function act(btn){
   if(btn===0){ // Kır
     if(r.block===12||r.b[1]===0)return;
     const drop=blockDrops[r.block];
-    if(drop!==undefined){const overflow=addItem(drop);if(overflow){dropItemStack(drop,overflow,r.b[0]+.5,r.b[1]+.5,r.b[2]+.5);msg('Envanter dolu; eşya yere düştü.')}}
+    if(gameMode!=='c'&&drop!==undefined){const overflow=addItem(drop);if(overflow){dropItemStack(drop,overflow,r.b[0]+.5,r.b[1]+.5,r.b[2]+.5);msg('Envanter dolu; eşya yere düştü.')}}
     set(...r.b,0);rebuildAt(r.b[0],r.b[2]);
   }else{ // Koy
     const item=inv[27+cur]?.id;
@@ -455,7 +522,7 @@ function act(btn){
     }else if(item==='wb'&&r.p&&get(...r.p)===0){
       set(...r.p,12);rebuildAt(r.p[0],r.p[2]);removeItem('wb');addItem('eb');msg('Su döküldü.');
     }else if(item&&Number.isInteger(Number(item))&&r.p&&get(...r.p)===0){
-      const block=Number(item);set(...r.p,block);rebuildAt(r.p[0],r.p[2]);removeItem(item);
+      const block=Number(item);set(...r.p,block);rebuildAt(r.p[0],r.p[2]);if(gameMode!=='c')removeItem(item);
     }
   }
 }
@@ -522,6 +589,7 @@ function bindSocketEvents(){
   });
   socket.on('itemDropped',spawnDroppedItem);
   socket.on('itemPickedUp',({id})=>removeDroppedItem(id));
+  socket.on('chatMessage',showChatMessage);
   socket.on('voiceState',({id,enabled})=>{
     const remote=remotes.get(id);
     if(!remote)return;
@@ -547,6 +615,25 @@ function bindSocketEvents(){
   });
   socket.on('disconnect',()=>{netSync=false;updateNetworkHud();if(onlineMode)msg('Bağlantı kesildi, yeniden bağlanılıyor...')});
 }
+
+document.getElementById('chatBox').addEventListener('submit',(event)=>{
+  event.preventDefault();
+  const input=document.getElementById('chatInput'),text=input.value.trim();
+  if(!text)return;
+  if(onlineMode&&socket?.connected){
+    socket.emit('chatMessage',text,(result)=>{
+      if(!result?.ok)return msg(result?.error||'Mesaj gönderilemedi.');
+      showChatMessage(result.message);
+    });
+  }else{
+    showChatMessage({name:authName,text});
+  }
+  input.value='';closeChat();
+});
+document.getElementById('chatInput').addEventListener('keydown',(event)=>{
+  if(event.key==='Escape'){event.preventDefault();closeChat()}
+});
+document.getElementById('respawnBtn').addEventListener('click',respawn);
 
 function openSocket(){
   if(socket?.connected)return Promise.resolve(socket);
@@ -625,6 +712,8 @@ lk.addEventListener('touchend',()=>lid=null);lk.addEventListener('touchcancel',(
 
 document.getElementById('bj').addEventListener('touchstart',()=>{jump=true});
 document.getElementById('bj').addEventListener('touchend',()=>{jump=false});
+document.getElementById('bt').addEventListener('touchstart',openChat);
+document.getElementById('bq').addEventListener('touchstart',dropSelectedItem);
 document.getElementById('bk').addEventListener('touchstart',()=>act(0));
 document.getElementById('bp').addEventListener('touchstart',()=>act(2));
 document.getElementById('bv').addEventListener('touchstart',()=>{camV=(camV+1)%2});
@@ -633,16 +722,23 @@ document.getElementById('closeInventory').addEventListener('click',()=>toggleInv
 document.getElementById('dropStackBtn').addEventListener('click',dropSelectedStack);
 
 window.addEventListener('keydown',(event)=>{
+  if(chatOpen){if(event.code==='Escape'){event.preventDefault();closeChat()}return}
   if(event.target instanceof HTMLInputElement||event.target instanceof HTMLSelectElement)return;
   if(event.code==='KeyE'&&locked){toggleInventory();event.preventDefault();return}
+  if(event.code==='KeyT'&&locked){openChat();event.preventDefault();return}
+  if(event.code==='KeyQ'&&locked){dropSelectedItem();event.preventDefault();return}
   if(event.code==='Escape'&&inventoryOpen){toggleInventory(false);event.preventDefault();return}
   if(inventoryOpen)return;
-  if(/^Digit[1-9]$/.test(event.code)){sel(Number(event.code.slice(-1))-1);return}
+  if(/^Digit[1-9]$/.test(event.code)){sel(Number(event.code.slice(-1))-1);event.preventDefault();return}
   keysDown.add(event.code);
   if(event.code==='Space'){jump=true;event.preventDefault()}
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code))event.preventDefault();
 });
 window.addEventListener('keyup',(event)=>{keysDown.delete(event.code);if(event.code==='Space')jump=false});
+window.addEventListener('wheel',(event)=>{
+  if(!locked||inventoryOpen||chatOpen)return;
+  sel(cur+(event.deltaY>0?1:-1));event.preventDefault();
+},{passive:false});
 canvas.addEventListener('click',()=>{if(!touch&&locked&&!pointerLocked)canvas.requestPointerLock?.()});
 document.addEventListener('pointerlockchange',()=>{pointerLocked=document.pointerLockElement===canvas});
 document.addEventListener('mousemove',(event)=>{
@@ -684,15 +780,30 @@ function loop(now=performance.now()){
     if(gameMode==='c'){
       P.vy=jump?sp:(keysDown.has('ShiftLeft')||keysDown.has('ShiftRight')?-sp:0);
     }else{
-      if(jump&&P.on){P.vy=8.5;P.on=false}
+      if(P.on&&!jump)fallStartY=P.y;
+      if(jump&&P.on){P.vy=8.5;P.on=false;fallStartY=null}
       P.vy-=GRAVITY*dt;
     }
     const nextY=Math.max(0,Math.min(H-PLAYER_HEIGHT,P.y+P.vy*dt));
     if(collidesWithWorld(P.x,nextY,P.z)){
-      if(P.vy<0)P.on=true;
+      if(P.vy<0){
+        P.on=true;
+        const fallDistance=fallStartY===null?0:fallStartY-P.y;
+        if(fallDistance>3)takeDamage(Math.max(1,Math.floor(fallDistance-3)));
+        fallStartY=null;
+      }
       P.vy=0;
     }else{
       P.y=nextY;P.on=false;
+    }
+    if(gameMode!=='c'){
+      survivalClock+=dt;
+      if(survivalClock>=8){
+        survivalClock-=8;
+        if(fd>0)fd--;else takeDamage(gameMode==='h'?2:1);
+        if(fd>=18&&hp>0&&hp<20&&survivalClock<dt)hp++;
+        updateSurvivalHud();
+      }
     }
     if(netSync&&socket?.connected&&performance.now()-lastMoveAt>100){
       lastMoveAt=performance.now();socket.emit('playerMove',{x:P.x,y:P.y,z:P.z,yaw});
@@ -709,7 +820,7 @@ function loop(now=performance.now()){
     drop.mesh.rotation.y+=dt*1.7;
     drop.mesh.position.y=drop.baseY+Math.sin(now*.003+drop.mesh.position.x)*.08;
     const dx=P.x-drop.mesh.position.x,dy=P.y-drop.baseY,dz=P.z-drop.mesh.position.z;
-    if(dx*dx+dy*dy+dz*dz>2.8*2.8||pendingPickups.has(id)||!canFitItem(drop.item,drop.count))return;
+    if(performance.now()<drop.pickupAfter||dx*dx+dy*dy+dz*dz>2.8*2.8||pendingPickups.has(id)||!canFitItem(drop.item,drop.count))return;
     if(onlineMode&&socket?.connected){
       pendingPickups.add(id);
       socket.emit('pickupDrop',id,(result)=>{
@@ -730,8 +841,11 @@ function loop(now=performance.now()){
 
 // Başlatma ve Menü İşlemleri
 function startGameProcess(mode,session=null){
-  gameMode=mode;
+  gameMode=['s','c','a','h'].includes(mode)?mode:'s';
+  document.getElementById('gameMode').value=gameMode;
   resetInventory();
+  hp=20;fd=20;survivalClock=0;fallStartY=null;dead=false;closeChat();
+  document.getElementById('deathModal').classList.add('hide');
   document.getElementById('worldModal').classList.add('hide');
   document.getElementById('cx').classList.remove('hide');
   document.getElementById('hb').classList.remove('hide');
@@ -746,8 +860,11 @@ function startGameProcess(mode,session=null){
   netSync=onlineMode;
   document.getElementById('netHud').classList.toggle('hide',!onlineMode);
   document.getElementById('hud').textContent=onlineMode?`Çevrim içi · ${authName}`:'Çevrim dışı oyun';
+  document.getElementById('hud').textContent+=` · ${{s:'Hayatta Kalma',c:'Yaratıcı',a:'Macera',h:'Zorlayıcı'}[gameMode]}`;
   updateNetworkHud();
+  document.getElementById('chatLog').classList.remove('hide');
   locked=true;
+  updateSurvivalHud();
   if(!loopStarted){loopStarted=true;loop()}
 }
 
