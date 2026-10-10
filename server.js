@@ -16,6 +16,7 @@ const io = new Server(server, { cors: { origin: allowedOrigins, methods: ['GET',
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET ortam değişkeni ayarlanmalıdır.');
 
+const { saveStore } = require('./storage');
 const DATA_DIR = process.env.STORAGE_DIR || path.join(__dirname, 'data');
 const STORE_FILE = path.join(DATA_DIR, 'store.json');
 const VIEW_RADIUS = 64;
@@ -23,10 +24,14 @@ const VOICE_RADIUS = 40;
 const MODES = new Set(['s', 'c', 'a', 'h']);
 const ITEM_IDS = new Set(['eb', 'wb', 'sw', 'pk', 'st', 'ir', ...Array.from({ length: 12 }, (_, index) => String(index + 1))]);
 let saved = { users: {}, worlds: {} };
-try {
-  saved = JSON.parse(fs.readFileSync(STORE_FILE, 'utf8'));
-} catch (error) {
-  if (error.code !== 'ENOENT') throw error;
+if (globalThis.__XXQ_SAVED__) {
+  saved = globalThis.__XXQ_SAVED__;
+} else {
+  try {
+    saved = JSON.parse(fs.readFileSync(STORE_FILE, 'utf8'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
 }
 const users = new Map(Object.entries(saved.users || {}));
 const worlds = new Map(Object.entries(saved.worlds || {}));
@@ -39,12 +44,7 @@ function persistStore() {
     users: Object.fromEntries(users),
     worlds: Object.fromEntries(worlds)
   });
-  persistQueue = persistQueue.then(async () => {
-    await fs.promises.mkdir(DATA_DIR, { recursive: true });
-    const temporaryFile = `${STORE_FILE}.tmp`;
-    await fs.promises.writeFile(temporaryFile, contents);
-    await fs.promises.rename(temporaryFile, STORE_FILE);
-  });
+  persistQueue = persistQueue.catch(() => {}).then(() => saveStore(contents));
   return persistQueue;
 }
 
