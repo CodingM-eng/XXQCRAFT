@@ -42,6 +42,7 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
 .recipe small{display:block;color:#c4b5d5;font-size:10px}
 .inventory-action{width:100%;margin-top:5px}
 #cx{position:fixed;top:50%;left:50%;width:14px;height:14px;margin:-7px 0 0 -7px;pointer-events:none;background:linear-gradient(#fff,#fff) center/2px 100% no-repeat,linear-gradient(#fff,#fff) center/100% 2px no-repeat;mix-blend-mode:difference;z-index:9}
+#mineProgress{position:fixed;top:50%;left:50%;width:42px;height:42px;margin:-21px 0 0 -21px;border-radius:50%;background:conic-gradient(#fbbf24 var(--mine-progress,0%),rgba(255,255,255,.18) 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));pointer-events:none;z-index:11}
 .hide{display:none!important}
 #tc{position:fixed;inset:0;pointer-events:none;z-index:15;touch-action:none}
 #jl,#lk{position:absolute;top:0;bottom:0;pointer-events:auto}
@@ -72,6 +73,7 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
 <body>
 <canvas id="c"></canvas>
 <div id="cx" class="hide"></div>
+<div id="mineProgress" class="hide" aria-hidden="true"></div>
 <div id="hud" class="hide"></div>
 <div id="survivalHud" class="hide"><span id="healthValue">Can 20/20</span><span id="foodValue">Açlık 20/20</span></div>
 <div id="chatLog" class="hide" aria-live="polite"></div>
@@ -242,6 +244,24 @@ function initTerrain(seedVal){
   loadingWorld=false;
 }
 
+function findSpawnPoint(originX=W/2,originZ=D/2){
+  const centerX=Math.floor(originX),centerZ=Math.floor(originZ);
+  for(let radius=0;radius<=12;radius++){
+    for(let dx=-radius;dx<=radius;dx++)for(let dz=-radius;dz<=radius;dz++){
+      if(Math.max(Math.abs(dx),Math.abs(dz))!==radius)continue;
+      const x=centerX+dx,z=centerZ+dz;
+      if(x<1||x>=W-1||z<1||z>=D-1)continue;
+      for(let y=H-3;y>=0;y--){
+        const floor=get(x,y,z);
+        if(floor===0||floor===5||floor===12||get(x,y+1,z)!==0||get(x,y+2,z)!==0)continue;
+        const spawn={x:x+.5,y:y+1,z:z+.5};
+        if(!collidesWithWorld(spawn.x,spawn.y,spawn.z))return spawn;
+      }
+    }
+  }
+  return{x:centerX+.5,y:35,z:centerZ+.5};
+}
+
 // 3D Çizim & Sahne
 const FACES=[{d:[1,0,0],c:[[1,0,1],[1,0,0],[1,1,0],[1,1,1]],s:.8,k:1},{d:[-1,0,0],c:[[0,0,0],[0,0,1],[0,1,1],[0,1,0]],s:.7,k:1},{d:[0,1,0],c:[[0,1,1],[1,1,1],[1,1,0],[0,1,0]],s:1,k:0},{d:[0,-1,0],c:[[0,0,0],[1,0,0],[1,0,1],[0,0,1]],s:.5,k:2},{d:[0,0,1],c:[[0,0,1],[1,0,1],[1,1,1],[0,1,1]],s:.9,k:1},{d:[0,0,-1],c:[[1,0,0],[0,0,0],[0,1,0],[1,1,0]],s:.75,k:1}];
 const UV=[[0,0],[1,0],[1,1],[0,1]];
@@ -351,6 +371,7 @@ addEventListener('resize',resize);resize();
 const P={x:W/2+.5,y:35,z:D/2+.5,vx:0,vy:0,vz:0,on:false};
 let yaw=0,pitch=0,gameMode='s',locked=false,dead=false,hp=20,fd=20,camV=0,cur=0;
 let survivalClock=0,fallStartY=null,chatOpen=false,settingsOpen=false,gamePaused=false;
+let miningHeld=false,miningTarget=null,miningElapsed=0;
 const INVENTORY_SIZE=36,STACK_LIMIT=64;
 const inv=Array(INVENTORY_SIZE).fill(null);
 const IC={eb:'🪣',wb:'💧',sw:'⚔',pk:'⛏',st:'│',ir:'🔩',1:'🌱',2:'🟫',3:'🪨',4:'🪵',5:'🍃',6:'🟨',7:'🪵',8:'🔩'};
@@ -422,9 +443,8 @@ function takeDamage(amount){
   }
 }
 function respawn(){
-  let groundY=23;
-  for(let y=H-2;y>=0;y--){if(get(Math.floor(W/2),y,Math.floor(D/2))!==0&&get(Math.floor(W/2),y,Math.floor(D/2))!==12){groundY=y+1;break}}
-  P.x=W/2+.5;P.y=groundY;P.z=D/2+.5;P.vx=P.vy=P.vz=0;P.on=true;
+  const spawn=findSpawnPoint();
+  P.x=spawn.x;P.y=spawn.y;P.z=spawn.z;P.vx=P.vy=P.vz=0;P.on=true;
   hp=20;if(gameMode!=='h')fd=20;
   dead=false;fallStartY=null;document.getElementById('deathModal').classList.add('hide');updateSurvivalHud();
 }
@@ -548,23 +568,45 @@ function ray(){
   return null;
 }
 
+function stopMining(){
+  miningHeld=false;miningTarget=null;miningElapsed=0;
+  document.getElementById('mineProgress').classList.add('hide');
+}
+function breakBlock(target){
+  if(!target||target.block===12||target.b[1]===0)return;
+  const drop=blockDrops[target.block];
+  if(gameMode!=='c'&&drop!==undefined){const overflow=addItem(drop);if(overflow){dropItemStack(drop,overflow,target.b[0]+.5,target.b[1]+.5,target.b[2]+.5);msg('Envanter dolu; eşya yere düştü.')}}
+  set(...target.b,0);rebuildAt(target.b[0],target.b[2]);
+}
+function startMining(){
+  if(!locked||gamePaused||inventoryOpen||chatOpen||dead)return;
+  const target=ray();if(!target||target.block===12||target.b[1]===0)return;
+  if(gameMode==='c'){breakBlock(target);stopMining();return}
+  miningHeld=true;miningTarget=target.b.join(',');miningElapsed=0;
+  document.getElementById('mineProgress').classList.remove('hide');
+}
+function updateMining(dt){
+  if(!miningHeld)return;
+  if(!locked||gamePaused||inventoryOpen||chatOpen||dead){stopMining();return}
+  const target=ray();
+  if(!target||target.block===12||target.b[1]===0){stopMining();return}
+  const key=target.b.join(',');
+  if(key!==miningTarget){miningTarget=key;miningElapsed=0}
+  miningElapsed+=dt;
+  document.getElementById('mineProgress').style.setProperty('--mine-progress',`${Math.min(100,miningElapsed/3*100)}%`);
+  if(miningElapsed>=3){breakBlock(target);miningTarget=null;miningElapsed=0}
+}
 function act(btn){
-  if(gameMode==='a') return; // Macera modunda kırma/koyma kapalı
+  if(btn===0){startMining();return}
+  if(gameMode==='a')return;
   const r=ray();if(!r)return;
-  if(btn===0){ // Kır
-    if(r.block===12||r.b[1]===0)return;
-    const drop=blockDrops[r.block];
-    if(gameMode!=='c'&&drop!==undefined){const overflow=addItem(drop);if(overflow){dropItemStack(drop,overflow,r.b[0]+.5,r.b[1]+.5,r.b[2]+.5);msg('Envanter dolu; eşya yere düştü.')}}
-    set(...r.b,0);rebuildAt(r.b[0],r.b[2]);
-  }else{ // Koy
-    const item=inv[27+cur]?.id;
-    if(item==='eb'&&r.block===12){
-      set(...r.b,0);rebuildAt(r.b[0],r.b[2]);removeItem('eb');addItem('wb');msg('Kova suyla doldu.');
-    }else if(item==='wb'&&r.p&&get(...r.p)===0){
-      set(...r.p,12);rebuildAt(r.p[0],r.p[2]);removeItem('wb');addItem('eb');msg('Su döküldü.');
-    }else if(item&&Number.isInteger(Number(item))&&r.p&&get(...r.p)===0){
-      const block=Number(item);set(...r.p,block);rebuildAt(r.p[0],r.p[2]);if(gameMode!=='c')removeItem(item);
-    }
+  const item=inv[27+cur]?.id;
+  if(item==='eb'&&r.block===12){
+    set(...r.b,0);rebuildAt(r.b[0],r.b[2]);removeItem('eb');addItem('wb');msg('Kova suyla doldu.');
+  }else if(item==='wb'&&r.p&&get(...r.p)===0){
+    set(...r.p,12);rebuildAt(r.p[0],r.p[2]);removeItem('wb');addItem('eb');msg('Su döküldü.');
+  }else if(item&&Number.isInteger(Number(item))&&r.p&&get(...r.p)===0){
+    const block=Number(item);set(...r.p,block);rebuildAt(r.p[0],r.p[2]);if(gameMode!=='c')removeItem(item);
   }
 }
 
@@ -764,7 +806,9 @@ document.getElementById('bj').addEventListener('touchstart',()=>{jump=true});
 document.getElementById('bj').addEventListener('touchend',()=>{jump=false});
 document.getElementById('bt').addEventListener('touchstart',openChat);
 document.getElementById('bq').addEventListener('touchstart',dropSelectedItem);
-document.getElementById('bk').addEventListener('touchstart',()=>act(0));
+document.getElementById('bk').addEventListener('touchstart',startMining);
+document.getElementById('bk').addEventListener('touchend',stopMining);
+document.getElementById('bk').addEventListener('touchcancel',stopMining);
 document.getElementById('bp').addEventListener('touchstart',()=>act(2));
 document.getElementById('bv').addEventListener('touchstart',()=>{camV=(camV+1)%2});
 document.getElementById('be').addEventListener('click',()=>toggleInventory());
@@ -796,14 +840,16 @@ window.addEventListener('wheel',(event)=>{
   sel(cur+(event.deltaY>0?1:-1));event.preventDefault();
 },{passive:false});
 canvas.addEventListener('click',()=>{if(!touch&&locked&&!pointerLocked)canvas.requestPointerLock?.()});
-document.addEventListener('pointerlockchange',()=>{pointerLocked=document.pointerLockElement===canvas});
+document.addEventListener('pointerlockchange',()=>{pointerLocked=document.pointerLockElement===canvas;if(!pointerLocked)stopMining()});
 document.addEventListener('mousemove',(event)=>{
   if(!pointerLocked)return;
   const sensitivity=.0025*gameSettings.sensitivity/5;
   yaw-=event.movementX*sensitivity;
   pitch=Math.max(-1.55,Math.min(1.55,pitch+(gameSettings.invertY?1:-1)*event.movementY*sensitivity));
 });
-canvas.addEventListener('mousedown',(event)=>{if(pointerLocked)act(event.button===0?0:2)});
+canvas.addEventListener('mousedown',(event)=>{if(!pointerLocked)return;if(event.button===0)startMining();else if(event.button===2)act(2)});
+window.addEventListener('mouseup',(event)=>{if(event.button===0)stopMining()});
+window.addEventListener('blur',stopMining);
 canvas.addEventListener('contextmenu',(event)=>event.preventDefault());
 
 // Döngü ve Fizik
@@ -821,6 +867,7 @@ let lastFrame=0;
 function loop(now=performance.now()){
   const dt=lastFrame?Math.min((now-lastFrame)/1000,.05):1/60;
   lastFrame=now;
+  updateMining(dt);
   if(locked&&!dead&&!inventoryOpen&&!gamePaused){
     const sp=(gameMode==='c'?7:4.5);
     const forward=(keysDown.has('KeyW')||keysDown.has('ArrowUp')?1:0)-(keysDown.has('KeyS')||keysDown.has('ArrowDown')?1:0);
@@ -911,11 +958,13 @@ function startGameProcess(mode,session=null){
   if(touch)document.getElementById('tc').classList.remove('hide');
   initTerrain(session?.world.seed||parseInt(document.getElementById('worldSeed').value)||123456);
   if(session?.world.blocks)session.world.blocks.forEach((block)=>{world[I(block.x,block.y,block.z)]=block.b});
-  if(session?.player){P.x=session.player.x;P.y=session.player.y;P.z=session.player.z}
+  const spawn=findSpawnPoint(session?.player?.x??W/2,session?.player?.z??D/2);
+  P.x=spawn.x;P.y=spawn.y;P.z=spawn.z;P.vx=P.vy=P.vz=0;P.on=true;
   session?.players?.forEach(addRemote);
   rebuildAll();
   onlineMode=Boolean(session);
   netSync=onlineMode;
+  if(session?.player&&socket?.connected)socket.emit('playerMove',{x:P.x,y:P.y,z:P.z,yaw});
   document.getElementById('netHud').classList.toggle('hide',!onlineMode);
   document.getElementById('hud').textContent=onlineMode?`Çevrim içi · ${authName}`:'Çevrim dışı oyun';
   document.getElementById('hud').textContent+=` · ${{s:'Hayatta Kalma',c:'Yaratıcı',a:'Macera',h:'Zorlayıcı'}[gameMode]}`;
