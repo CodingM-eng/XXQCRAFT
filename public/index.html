@@ -21,6 +21,12 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
 .s{width:100%;height:auto;aspect-ratio:1;border:2px solid #581c87;position:relative;display:flex;align-items:flex-end;justify-content:flex-end;font-size:11px;font-weight:700;min-width:0}
 .s.on{border-color:#e9d5ff;box-shadow:0 0 8px #c084fc}
 #invModal{z-index:45;touch-action:auto}
+#settingsModal{z-index:50;touch-action:auto}
+#settingsModal .panel{max-height:calc(100dvh - 24px);overflow:auto;text-align:left;touch-action:pan-y}
+#settingsModal input{touch-action:auto}
+#settingsModal label{display:flex;justify-content:space-between;gap:12px;margin:16px 0 6px;font-size:13px}
+#settingsModal input[type=range]{width:100%;accent-color:#a855f7}
+#resumeBtn{width:100%;margin-top:14px}
 #invModal .panel{max-width:720px;max-height:calc(100dvh - 24px);overflow:auto;text-align:left;touch-action:pan-y;padding:16px}
 .inv-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .inv-head h2,.inventory-section h2{font-size:18px;margin:0;color:#e9d5ff}
@@ -46,6 +52,7 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
 #bj{bottom:140px;right:14px}#bk{bottom:70px;right:84px}#bp{bottom:70px;right:14px}
 #be{top:14px;right:14px}#bv{top:84px;right:14px}
 #bt{top:154px;right:14px}#bq{bottom:210px;right:14px}
+#bm{top:224px;right:14px}
 #hud{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,5,20,.7);padding:6px 12px;border-radius:6px;font-size:12px;border:1px solid #581c87}
 #survivalHud{position:fixed;top:42px;left:10px;z-index:10;display:flex;gap:10px;background:rgba(10,5,20,.82);padding:6px 10px;border:1px solid #581c87;border-radius:5px;font-size:12px}
 #chatLog{position:fixed;left:10px;bottom:76px;z-index:18;width:min(420px,calc(100vw - 20px));max-height:180px;overflow:auto;pointer-events:none;text-shadow:1px 1px 2px #000}
@@ -80,6 +87,7 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
   <div class="ab" id="be">Çanta</div>
   <div class="ab" id="bv">Kamera</div>
   <div class="ab" id="bt">Sohbet</div>
+  <div class="ab" id="bm">Ayar</div>
   <div class="ab" id="bj">Zıpla</div>
   <div class="ab" id="bq">At</div>
   <div class="ab" id="bk">Kır</div>
@@ -148,6 +156,18 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
         <div id="creativeCatalog" class="hide"><h2 style="margin-top:16px">Yaratıcı bloklar</h2><div id="creativeItems" class="recipe-list"></div></div>
       </section>
     </div>
+  </div>
+</div>
+
+<div id="settingsModal" class="modal hide">
+  <div class="panel">
+    <h1 style="font-size:22px;text-align:left">Ayarlar</h1>
+    <label for="lookSensitivity">Bakış hassasiyeti <output id="sensitivityValue"></output></label>
+    <input id="lookSensitivity" type="range" min="1" max="10" step="1" value="5">
+    <label for="fieldOfView">Görüş açısı <output id="fovValue"></output></label>
+    <input id="fieldOfView" type="range" min="60" max="100" step="1" value="75">
+    <label for="invertLook">Dikey bakışı ters çevir <input id="invertLook" type="checkbox"></label>
+    <button class="btn" id="resumeBtn" type="button">Oyuna Dön</button>
   </div>
 </div>
 
@@ -320,13 +340,17 @@ const canvas=document.getElementById('c');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:false});
 const camera=new THREE.PerspectiveCamera(75,1,.1,200);
 camera.rotation.order='YXZ';
+const SETTINGS_KEY='xxqcraft-game-settings';
+let gameSettings={sensitivity:5,fov:75,invertY:false};
+try{gameSettings={...gameSettings,...JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')}}catch{}
+camera.fov=Math.max(60,Math.min(100,Number(gameSettings.fov)||75));camera.updateProjectionMatrix();
 function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}
 addEventListener('resize',resize);resize();
 
 // Oyuncu Değişkenleri
 const P={x:W/2+.5,y:35,z:D/2+.5,vx:0,vy:0,vz:0,on:false};
 let yaw=0,pitch=0,gameMode='s',locked=false,dead=false,hp=20,fd=20,camV=0,cur=0;
-let survivalClock=0,fallStartY=null,chatOpen=false;
+let survivalClock=0,fallStartY=null,chatOpen=false,settingsOpen=false,gamePaused=false;
 const INVENTORY_SIZE=36,STACK_LIMIT=64;
 const inv=Array(INVENTORY_SIZE).fill(null);
 const IC={eb:'🪣',wb:'💧',sw:'⚔',pk:'⛏',st:'│',ir:'🔩',1:'🌱',2:'🟫',3:'🪨',4:'🪵',5:'🍃',6:'🟨',7:'🪵',8:'🔩'};
@@ -403,6 +427,23 @@ function respawn(){
   P.x=W/2+.5;P.y=groundY;P.z=D/2+.5;P.vx=P.vy=P.vz=0;P.on=true;
   hp=20;if(gameMode!=='h')fd=20;
   dead=false;fallStartY=null;document.getElementById('deathModal').classList.add('hide');updateSurvivalHud();
+}
+function saveGameSettings(){
+  gameSettings.sensitivity=Number(document.getElementById('lookSensitivity').value);
+  gameSettings.fov=Number(document.getElementById('fieldOfView').value);
+  gameSettings.invertY=document.getElementById('invertLook').checked;
+  camera.fov=gameSettings.fov;camera.updateProjectionMatrix();
+  document.getElementById('sensitivityValue').value=gameSettings.sensitivity;
+  document.getElementById('fovValue').value=`${gameSettings.fov}°`;
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(gameSettings));
+}
+function toggleSettings(force){
+  if(!locked&&!settingsOpen)return;
+  settingsOpen=typeof force==='boolean'?force:!settingsOpen;
+  gamePaused=settingsOpen;
+  document.getElementById('settingsModal').classList.toggle('hide',!settingsOpen);
+  if(settingsOpen)document.exitPointerLock?.();
+  else if(locked&&!touch)canvas.requestPointerLock?.();
 }
 function recipeAvailable(recipe){return Object.entries(recipe.needs).every(([id,count])=>countItem(id)>=count)}
 function craftRecipe(index){
@@ -700,6 +741,15 @@ const touch=navigator.maxTouchPoints>0||matchMedia('(pointer: coarse)').matches;
 let jx=0,jy=0,jid=null,jo=null,lid=null,lp=null,jump=false;
 const jb=document.getElementById('jb'),jk=document.getElementById('jk');
 const jl=document.getElementById('jl'),lk=document.getElementById('lk');
+document.getElementById('lookSensitivity').value=gameSettings.sensitivity;
+document.getElementById('fieldOfView').value=gameSettings.fov;
+document.getElementById('invertLook').checked=gameSettings.invertY;
+saveGameSettings();
+document.getElementById('lookSensitivity').addEventListener('input',saveGameSettings);
+document.getElementById('fieldOfView').addEventListener('input',saveGameSettings);
+document.getElementById('invertLook').addEventListener('change',saveGameSettings);
+document.getElementById('resumeBtn').addEventListener('click',()=>toggleSettings(false));
+document.getElementById('bm').addEventListener('click',()=>toggleSettings());
 
 jl.addEventListener('touchstart',e=>{const t=e.changedTouches[0];jid=t.identifier;jo=[t.clientX,t.clientY];jb.style.display='block';jb.style.left=t.clientX+'px';jb.style.top=t.clientY+'px'},{passive:false});
 jl.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===jid){let dx=t.clientX-jo[0],dy=t.clientY-jo[1];const m=Math.hypot(dx,dy),R=45;if(m>R){dx*=R/m;dy*=R/m}jx=dx/R;jy=dy/R;jk.style.transform=`translate(${dx}px,${dy}px)`}},{passive:false});
@@ -707,7 +757,7 @@ const jend=()=>{jid=null;jx=jy=0;jb.style.display='none';jk.style.transform='tra
 jl.addEventListener('touchend',jend);jl.addEventListener('touchcancel',jend);
 
 lk.addEventListener('touchstart',e=>{const t=e.changedTouches[0];lid=t.identifier;lp=[t.clientX,t.clientY]},{passive:false});
-lk.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===lid){yaw-=(t.clientX-lp[0])*.006;pitch=Math.max(-1.55,Math.min(1.55,pitch-(t.clientY-lp[1])*.006));lp=[t.clientX,t.clientY]}},{passive:false});
+lk.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===lid){const sensitivity=.006*gameSettings.sensitivity/5;yaw-=(t.clientX-lp[0])*sensitivity;pitch=Math.max(-1.55,Math.min(1.55,pitch+(gameSettings.invertY?1:-1)*(t.clientY-lp[1])*sensitivity));lp=[t.clientX,t.clientY]}},{passive:false});
 lk.addEventListener('touchend',()=>lid=null);lk.addEventListener('touchcancel',()=>lid=null);
 
 document.getElementById('bj').addEventListener('touchstart',()=>{jump=true});
@@ -723,11 +773,17 @@ document.getElementById('dropStackBtn').addEventListener('click',dropSelectedSta
 
 window.addEventListener('keydown',(event)=>{
   if(chatOpen){if(event.code==='Escape'){event.preventDefault();closeChat()}return}
+  if(event.code==='Escape'){
+    if(settingsOpen)toggleSettings(false);
+    else if(inventoryOpen)toggleInventory(false);
+    else if(locked)toggleSettings(true);
+    event.preventDefault();return;
+  }
+  if(settingsOpen)return;
   if(event.target instanceof HTMLInputElement||event.target instanceof HTMLSelectElement)return;
   if(event.code==='KeyE'&&locked){toggleInventory();event.preventDefault();return}
   if(event.code==='KeyT'&&locked){openChat();event.preventDefault();return}
   if(event.code==='KeyQ'&&locked){dropSelectedItem();event.preventDefault();return}
-  if(event.code==='Escape'&&inventoryOpen){toggleInventory(false);event.preventDefault();return}
   if(inventoryOpen)return;
   if(/^Digit[1-9]$/.test(event.code)){sel(Number(event.code.slice(-1))-1);event.preventDefault();return}
   keysDown.add(event.code);
@@ -743,8 +799,9 @@ canvas.addEventListener('click',()=>{if(!touch&&locked&&!pointerLocked)canvas.re
 document.addEventListener('pointerlockchange',()=>{pointerLocked=document.pointerLockElement===canvas});
 document.addEventListener('mousemove',(event)=>{
   if(!pointerLocked)return;
-  yaw-=event.movementX*.0025;
-  pitch=Math.max(-1.55,Math.min(1.55,pitch-event.movementY*.0025));
+  const sensitivity=.0025*gameSettings.sensitivity/5;
+  yaw-=event.movementX*sensitivity;
+  pitch=Math.max(-1.55,Math.min(1.55,pitch+(gameSettings.invertY?1:-1)*event.movementY*sensitivity));
 });
 canvas.addEventListener('mousedown',(event)=>{if(pointerLocked)act(event.button===0?0:2)});
 canvas.addEventListener('contextmenu',(event)=>event.preventDefault());
@@ -764,7 +821,7 @@ let lastFrame=0;
 function loop(now=performance.now()){
   const dt=lastFrame?Math.min((now-lastFrame)/1000,.05):1/60;
   lastFrame=now;
-  if(locked&&!dead&&!inventoryOpen){
+  if(locked&&!dead&&!inventoryOpen&&!gamePaused){
     const sp=(gameMode==='c'?7:4.5);
     const forward=(keysDown.has('KeyW')||keysDown.has('ArrowUp')?1:0)-(keysDown.has('KeyS')||keysDown.has('ArrowDown')?1:0);
     const sideways=(keysDown.has('KeyD')?1:0)-(keysDown.has('KeyA')?1:0);
@@ -820,7 +877,7 @@ function loop(now=performance.now()){
     drop.mesh.rotation.y+=dt*1.7;
     drop.mesh.position.y=drop.baseY+Math.sin(now*.003+drop.mesh.position.x)*.08;
     const dx=P.x-drop.mesh.position.x,dy=P.y-drop.baseY,dz=P.z-drop.mesh.position.z;
-    if(performance.now()<drop.pickupAfter||dx*dx+dy*dy+dz*dz>2.8*2.8||pendingPickups.has(id)||!canFitItem(drop.item,drop.count))return;
+    if(gamePaused||performance.now()<drop.pickupAfter||dx*dx+dy*dy+dz*dz>2.8*2.8||pendingPickups.has(id)||!canFitItem(drop.item,drop.count))return;
     if(onlineMode&&socket?.connected){
       pendingPickups.add(id);
       socket.emit('pickupDrop',id,(result)=>{
@@ -842,6 +899,7 @@ function loop(now=performance.now()){
 // Başlatma ve Menü İşlemleri
 function startGameProcess(mode,session=null){
   gameMode=['s','c','a','h'].includes(mode)?mode:'s';
+  settingsOpen=false;gamePaused=false;document.getElementById('settingsModal').classList.add('hide');
   document.getElementById('gameMode').value=gameMode;
   resetInventory();
   hp=20;fd=20;survivalClock=0;fallStartY=null;dead=false;closeChat();
