@@ -24,6 +24,9 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
 .s.on{border-color:#e9d5ff;box-shadow:0 0 8px #c084fc}
 #invModal{z-index:45;touch-action:auto}
 #settingsModal{z-index:50;touch-action:auto}
+#pauseModal{z-index:48}
+#pauseModal .panel{max-width:400px}
+#pauseModal .btn{width:100%;margin:5px 0}
 #settingsModal .panel{max-height:calc(100dvh - 24px);overflow:auto;text-align:left;touch-action:pan-y}
 #settingsModal input{touch-action:auto}
 #settingsModal label{display:flex;justify-content:space-between;gap:12px;margin:16px 0 6px;font-size:13px}
@@ -175,7 +178,18 @@ p{margin:6px 0;font-size:13px;color:#d8b4fe}
     <input id="fieldOfView" type="range" min="60" max="100" step="1" value="75">
     <label for="invertLook">Dikey bakışı ters çevir <input id="invertLook" type="checkbox"></label>
     <label for="reverseScroll">Hotbar tekerlek yönünü ters çevir <input id="reverseScroll" type="checkbox"></label>
+    <button class="btn" id="settingsBackBtn" type="button">Duraklatma Menüsüne Dön</button>
+  </div>
+</div>
+
+<div id="pauseModal" class="modal hide">
+  <div class="panel">
+    <h1 style="font-size:24px">Oyun Duraklatıldı</h1>
+    <p id="pauseWorldInfo"></p>
     <button class="btn" id="resumeBtn" type="button">Oyuna Dön</button>
+    <button class="btn" id="inviteBtn" type="button">Arkadaşını Davet Et</button>
+    <button class="btn" id="openSettingsBtn" type="button">Ayarlar</button>
+    <button class="btn" id="leaveWorldBtn" type="button" style="background:#7f1d1d">Ana Menüye Dön</button>
   </div>
 </div>
 
@@ -377,6 +391,7 @@ addEventListener('resize',resize);resize();
 const P={x:W/2+.5,y:35,z:D/2+.5,vx:0,vy:0,vz:0,on:false};
 let yaw=0,pitch=0,gameMode='s',locked=false,dead=false,hp=20,fd=20,camV=0,cur=0;
 let survivalClock=0,fallStartY=null,chatOpen=false,settingsOpen=false,gamePaused=false;
+let pauseOpen=false;
 let miningHeld=false,miningTarget=null,miningElapsed=0;
 const INVENTORY_SIZE=36,STACK_LIMIT=64;
 const inv=Array(INVENTORY_SIZE).fill(null);
@@ -473,13 +488,50 @@ function saveGameSettings(){
   document.getElementById('fovValue').value=`${gameSettings.fov}°`;
   localStorage.setItem(SETTINGS_KEY,JSON.stringify(gameSettings));
 }
-function toggleSettings(force){
-  if(!locked&&!settingsOpen)return;
-  settingsOpen=typeof force==='boolean'?force:!settingsOpen;
-  gamePaused=settingsOpen;
-  document.getElementById('settingsModal').classList.toggle('hide',!settingsOpen);
-  if(settingsOpen)document.exitPointerLock?.();
-  else if(locked&&!touch)canvas.requestPointerLock?.();
+function openPauseMenu(){
+  if(!locked||dead||pauseOpen)return;
+  stopMining();keysDown.clear();pauseOpen=true;gamePaused=true;settingsOpen=false;
+  document.getElementById('pauseWorldInfo').textContent=onlineMode?`Dünya kodu: ${currentWorldCode}`:'Çevrim dışı dünya';
+  document.getElementById('pauseModal').classList.remove('hide');
+  document.getElementById('settingsModal').classList.add('hide');
+  document.exitPointerLock?.();
+}
+function closePauseMenu(){
+  pauseOpen=false;gamePaused=false;document.getElementById('pauseModal').classList.add('hide');
+  if(locked&&!touch)canvas.requestPointerLock?.();
+}
+function openSettingsFromPause(){
+  if(!pauseOpen)return;
+  pauseOpen=false;settingsOpen=true;
+  document.getElementById('pauseModal').classList.add('hide');
+  document.getElementById('settingsModal').classList.remove('hide');
+}
+function returnToPauseMenu(){
+  settingsOpen=false;pauseOpen=true;gamePaused=true;
+  document.getElementById('settingsModal').classList.add('hide');
+  document.getElementById('pauseModal').classList.remove('hide');
+}
+function inviteFriend(){
+  if(!onlineMode||!currentWorldCode)return msg('Arkadaş daveti için önce çevrim içi dünya oluştur.');
+  const invite=`XXQCRAFT dünya kodu: ${currentWorldCode}`;
+  if(navigator.share){navigator.share({title:'XXQCRAFT daveti',text:invite}).catch(()=>{});return}
+  if(navigator.clipboard?.writeText)navigator.clipboard.writeText(currentWorldCode).then(()=>msg(`Dünya kodu kopyalandı: ${currentWorldCode}`)).catch(()=>prompt('Arkadaşına bu kodu gönder:',currentWorldCode));
+  else prompt('Arkadaşına bu dünya kodunu gönder:',currentWorldCode);
+}
+function leaveToWorldMenu(){
+  stopMining();closeChat();
+  if(localStream){localStream.getTracks().forEach((track)=>track.stop());localStream=null}
+  voicePeers.forEach((peer)=>peer.close());voicePeers.clear();
+  audioElements.forEach((audio)=>{audio.srcObject=null;audio.remove()});audioElements.clear();
+  if(socket){socket.disconnect();socket=null}
+  droppedItems.forEach((_,id)=>removeDroppedItem(id));remotes.forEach((_,id)=>removeRemote(id));
+  netSync=false;onlineMode=false;locked=false;dead=false;gamePaused=false;pauseOpen=false;settingsOpen=false;
+  document.getElementById('pauseModal').classList.add('hide');
+  document.getElementById('settingsModal').classList.add('hide');
+  document.getElementById('deathModal').classList.add('hide');
+  document.getElementById('invModal').classList.add('hide');
+  for(const id of ['cx','hb','hud','survivalHud','netHud','chatLog','tc'])document.getElementById(id).classList.add('hide');
+  document.getElementById('worldModal').classList.remove('hide');
 }
 function recipeAvailable(recipe){return Object.entries(recipe.needs).every(([id,count])=>countItem(id)>=count)}
 function craftRecipe(index){
@@ -799,8 +851,12 @@ document.getElementById('lookSensitivity').addEventListener('input',saveGameSett
 document.getElementById('fieldOfView').addEventListener('input',saveGameSettings);
 document.getElementById('invertLook').addEventListener('change',saveGameSettings);
 document.getElementById('reverseScroll').addEventListener('change',saveGameSettings);
-document.getElementById('resumeBtn').addEventListener('click',()=>toggleSettings(false));
-document.getElementById('bm').addEventListener('click',()=>toggleSettings());
+document.getElementById('settingsBackBtn').addEventListener('click',returnToPauseMenu);
+document.getElementById('resumeBtn').addEventListener('click',closePauseMenu);
+document.getElementById('inviteBtn').addEventListener('click',inviteFriend);
+document.getElementById('openSettingsBtn').addEventListener('click',openSettingsFromPause);
+document.getElementById('leaveWorldBtn').addEventListener('click',leaveToWorldMenu);
+document.getElementById('bm').addEventListener('click',openPauseMenu);
 
 jl.addEventListener('touchstart',e=>{const t=e.changedTouches[0];jid=t.identifier;jo=[t.clientX,t.clientY];jb.style.display='block';jb.style.left=t.clientX+'px';jb.style.top=t.clientY+'px'},{passive:false});
 jl.addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===jid){let dx=t.clientX-jo[0],dy=t.clientY-jo[1];const m=Math.hypot(dx,dy),R=45;if(m>R){dx*=R/m;dy*=R/m}jx=dx/R;jy=dy/R;jk.style.transform=`translate(${dx}px,${dy}px)`}},{passive:false});
@@ -827,9 +883,10 @@ document.getElementById('dropStackBtn').addEventListener('click',dropSelectedSta
 window.addEventListener('keydown',(event)=>{
   if(chatOpen){if(event.code==='Escape'){event.preventDefault();closeChat()}return}
   if(event.code==='Escape'){
-    if(settingsOpen)toggleSettings(false);
+    if(settingsOpen)returnToPauseMenu();
+    else if(pauseOpen)closePauseMenu();
     else if(inventoryOpen)toggleInventory(false);
-    else if(locked)toggleSettings(true);
+    else if(locked)openPauseMenu();
     event.preventDefault();return;
   }
   if(settingsOpen)return;
@@ -956,7 +1013,7 @@ function loop(now=performance.now()){
 // Başlatma ve Menü İşlemleri
 function startGameProcess(mode,session=null){
   gameMode=['s','c','a','h'].includes(mode)?mode:'s';
-  settingsOpen=false;gamePaused=false;document.getElementById('settingsModal').classList.add('hide');
+  settingsOpen=false;pauseOpen=false;gamePaused=false;document.getElementById('settingsModal').classList.add('hide');document.getElementById('pauseModal').classList.add('hide');
   document.getElementById('gameMode').value=gameMode;
   resetInventory();
   hp=20;fd=20;survivalClock=0;fallStartY=null;dead=false;closeChat();
